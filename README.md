@@ -14,32 +14,45 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 * **Sleep & Timers:** Sleep after, Hibernate after, Allow hybrid sleep, unattended sleep timeouts.
 * **Activates High Performance Power Scheme.**
 
-### 2. Gaming & System Responsiveness (MMCSS)
-* `SystemResponsiveness = 0`: Allocates 100% CPU priority to foreground applications instead of reserving 20% for background OS tasks.
+### 2. Gaming, MMCSS & Low-Latency DirectFlip
+* `SystemResponsiveness = 10`: Reserves 90% CPU priority for foreground games while retaining smooth background audio/voice comms.
 * `NetworkThrottlingIndex = 0xffffffff`: Disables network throttling during CPU-heavy operations and gaming.
 * `GPU Priority = 8` & `Priority = 6` for the Multimedia Class Scheduler (`Games` task).
-* Disables `GameDVR` background recording and screenshot capture hooks.
+* `Latency Sensitive = True`: Eliminates scheduler thread latency for gaming workloads.
+* **DirectFlip & DXGI Low-Latency Swapchain:**
+  * `EnableMMCSS = 1`
+  * `AlwaysUseDirectFlip = 1` (Bypasses DWM compositor overhead for lower input latency in windowed/borderless games)
+  * `AllowTearing = 1` (Allows uncapped tearing frames for minimal latency)
+  * `AlwaysOn = 1` & `NoLazyMode = 1`
+* Disables `GameDVR` background recording, FSE overlays, and screenshot capture hooks.
 * **HAGS (Hardware-Accelerated GPU Scheduling) is left untouched / disabled** per system preference.
 
-### 3. Network / TCP Stack Optimization
+### 3. Kernel, Memory Management & 1:1 Mouse Input
+* `Win32PrioritySeparation = 38` (`0x26`): Short, variable high-priority quantum favoring foreground gaming loops.
+* `DisablePagingExecutive = 1`: Keeps drivers and Windows kernel locked in physical RAM instead of paging to disk.
+* `IoPageLockLimit = 134217728` (128 MB): Expands the I/O lock buffer for high disk/network transfer rates.
+* **Raw 1:1 Mouse Input:** Disables Enhanced Pointer Precision (mouse acceleration) via `MouseSpeed = 0`, `MouseThreshold1 = 0`, `MouseThreshold2 = 0`.
+
+### 4. Advanced Network & TCP/IP Stack
 * Configures TCP congestion provider to `CUBIC`.
 * Sets TCP autotuning level to `Normal`.
 * Enables Receive Side Scaling (`RSS`) and Receive Segment Coalescing (`RSC`) for multi-core packet offloading.
-* Disables ECN and TCP timestamps for reduced overhead.
+* `TCPTimedWaitDelay = 30`: Accelerates socket reuse by lowering TIME_WAIT teardown from 120s down to 30s.
+* `MaxUserPort = 65534`: Maximizes dynamic outbound port availability.
+* `TcpMaxDupAcks = 2`: Speeds up fast retransmits on lost packets.
+* `SackOpts = 1`, `EnablePMTUDiscovery = 1`.
 
-### 4. Telemetry, Diagnostic & Promo Bloat Removal
+### 5. Telemetry, Diagnostic & Promo Bloat Removal
 * Disables telemetry data collection (`AllowTelemetry = 0`).
 * Enforces dump and diagnostic log upload limits.
 * Disables Windows 11 lock screen tips, Start suggestions, and Consumer Experience auto-installs.
 * Disables Windows Widgets and News & Interests (`AllowNewsAndInterests = 0`).
-
-### 5. Instant UI Responsiveness
-* Sets `MenuShowDelay = 0` for instantaneous right-click and context menu rendering without artificial Windows delays.
-* Speeds up application kill timeout on shutdown.
+* Sets `MenuShowDelay = 0` for instantaneous right-click and menu rendering.
 
 ### 6. Pure Windows Internal Service Trimming (47 Exact Services)
 * Contains **zero third-party software services** — only pure Windows internal services.
 * Sets all 47 Windows daemons that cause process bloat to `Disabled` (e.g., `DiagTrack`, `SysMain`, `WSearch`, `WerSvc`, `PcaSvc`, `DPS`, `TrkWks`, `WalletService`, `CscService`, `TermService`).
+* Sets `lfsvc` (Geolocation) to `Manual`.
 
 ---
 

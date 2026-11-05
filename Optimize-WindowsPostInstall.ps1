@@ -5,11 +5,12 @@
     Replicates your exact 139-process, low-latency, zero-bloat Windows environment:
       1. Unhides specifically your 34 curated Advanced Power Plan settings.
       2. Activates High Performance power scheme.
-      3. Network / TCP stack optimization (CUBIC, RSS, RSC, No Throttling).
-      4. Gaming & MMCSS latency optimization (SystemResponsiveness=0, GPU Priority=8, GameDVR=0).
-      5. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
-      6. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
-      7. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
+      3. Advanced TCP/IP stack optimization (CUBIC, RSS, RSC, TimedWaitDelay, MaxUserPort, Fast Retransmit).
+      4. Gaming, MMCSS & Low-Latency DirectFlip (SystemResponsiveness=10, AlwaysUseDirectFlip, AllowTearing, Latency Sensitive).
+      5. Kernel & Memory Management (DisablePagingExecutive=1, IoPageLockLimit, Win32PrioritySeparation=38, 1:1 Mouse Input).
+      6. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
+      7. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
+      8. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
 .NOTES
     Run in an elevated PowerShell session (Run as Administrator) after a fresh install.
 #>
@@ -34,7 +35,7 @@ Write-Host ""
 # -------------------------------------------------------------
 # 1. UNHIDE SPECIFIC CURATED ADVANCED POWER SETTINGS (34 SETTINGS)
 # -------------------------------------------------------------
-Write-Host "[1/6] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
+Write-Host "[1/7] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
 
 $curatedPowerSettings = @(
     # Hard Disk: Turn off hard disk after
@@ -100,27 +101,32 @@ powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 Write-Host "  -> Activated High Performance Power Scheme." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 2. GAMING, MULTIMEDIA & MMCSS LATENCY TUNING (HAGS EXCLUDED)
+# 2. GAMING, MULTIMEDIA, MMCSS & DIRECTFLIP LATENCY TUNING
 # -------------------------------------------------------------
-Write-Host "[2/6] Applying Gaming & System Responsiveness Tweaks..." -ForegroundColor Green
+Write-Host "[2/7] Applying Gaming & System Responsiveness Tweaks..." -ForegroundColor Green
 
 # Disable GameDVR background recording overhead
 $gameConfigPath = "HKCU:\System\GameConfigStore"
 if (-not (Test-Path $gameConfigPath)) { New-Item -Path $gameConfigPath -Force | Out-Null }
 Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_Enabled" -Value 0 -Type DWord -Force
 Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_FSEBehaviorMode" -Value 2 -Type DWord -Force
+Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_HonorUserFSEBehaviorMode" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_FSEBehavior" -Value 2 -Type DWord -Force
 
 $allowGameDvr = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
 if (-not (Test-Path $allowGameDvr)) { New-Item -Path $allowGameDvr -Force | Out-Null }
 Set-ItemProperty -Path $allowGameDvr -Name "AllowGameDVR" -Value 0 -Type DWord -Force
 
-# Note: HAGS (Hardware-Accelerated GPU Scheduling) is intentionally untouched per preference.
-
-# Multimedia Class Scheduler Service (MMCSS) - 100% foreground CPU slice
+# Multimedia Class Scheduler Service (MMCSS) & Low Latency DirectFlip
 $systemProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
 if (-not (Test-Path $systemProfile)) { New-Item -Path $systemProfile -Force | Out-Null }
 Set-ItemProperty -Path $systemProfile -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "SystemResponsiveness" -Value 10 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "EnableMMCSS" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "AlwaysUseDirectFlip" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "AllowTearing" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "AlwaysOn" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $systemProfile -Name "NoLazyMode" -Value 1 -Type DWord -Force
 
 $tasksGames = "$systemProfile\Tasks\Games"
 if (-not (Test-Path $tasksGames)) { New-Item -Path $tasksGames -Force | Out-Null }
@@ -131,15 +137,38 @@ Set-ItemProperty -Path $tasksGames -Name "GPU Priority" -Value 8 -Type DWord -Fo
 Set-ItemProperty -Path $tasksGames -Name "Priority" -Value 6 -Type DWord -Force
 Set-ItemProperty -Path $tasksGames -Name "Scheduling Category" -Value "High" -Type String -Force
 Set-ItemProperty -Path $tasksGames -Name "SFIO Priority" -Value "High" -Type String -Force
+Set-ItemProperty -Path $tasksGames -Name "Latency Sensitive" -Value "True" -Type String -Force
 
-Write-Host "  -> MMCSS gaming priority and zero-throttle rules applied." -ForegroundColor Gray
+Write-Host "  -> MMCSS gaming priority, DirectFlip, and latency-sensitive scheduling applied." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 3. NETWORK & TCP STACK OPTIMIZATION
+# 3. KERNEL, MEMORY MANAGEMENT & MOUSE INPUT LATENCY
 # -------------------------------------------------------------
-Write-Host "[3/6] Tuning Network TCP Stack for Low Ping & Stability..." -ForegroundColor Green
+Write-Host "[3/7] Tuning Kernel Priority, Memory Management & Mouse..." -ForegroundColor Green
 
-# Global TCP Settings via Netsh
+# CPU Quantum / Priority Separation (0x26 = 38: Short, variable foreground quantum)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
+
+# Memory Management (Lock kernel in RAM, increase I/O page lock limit)
+$memMgmtPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
+Set-ItemProperty -Path $memMgmtPath -Name "DisablePagingExecutive" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $memMgmtPath -Name "LargeSystemCache" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path $memMgmtPath -Name "IoPageLockLimit" -Value 134217728 -Type DWord -Force
+
+# Raw 1:1 Mouse Input (Disables Enhanced Pointer Precision / Acceleration)
+$mouseKey = "HKCU:\Control Panel\Mouse"
+Set-ItemProperty -Path $mouseKey -Name "MouseSpeed" -Value "0" -Type String -Force
+Set-ItemProperty -Path $mouseKey -Name "MouseThreshold1" -Value "0" -Type String -Force
+Set-ItemProperty -Path $mouseKey -Name "MouseThreshold2" -Value "0" -Type String -Force
+
+Write-Host "  -> Win32PrioritySeparation 38, DisablePagingExecutive, and 1:1 Mouse Input configured." -ForegroundColor Gray
+
+# -------------------------------------------------------------
+# 4. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
+# -------------------------------------------------------------
+Write-Host "[4/7] Tuning Network TCP Stack for Low Ping & Fast Socket Recycling..." -ForegroundColor Green
+
+# Netsh TCP Global
 netsh int tcp set global autotuninglevel=normal | Out-Null
 netsh int tcp set global rss=enabled | Out-Null
 netsh int tcp set global rsc=enabled | Out-Null
@@ -149,12 +178,23 @@ netsh int tcp set global ecncapability=disabled | Out-Null
 netsh int tcp set supplemental template=internet congestionprovider=cubic | Out-Null
 netsh int tcp set supplemental template=datacenter congestionprovider=cubic | Out-Null
 
-Write-Host "  -> Network TCP autotuning normal, CUBIC congestion provider, RSS/RSC enabled." -ForegroundColor Gray
+# Advanced TCP/IP Parameters in Registry
+$tcpParams = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+Set-ItemProperty -Path $tcpParams -Name "EnablePMTUDiscovery" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "EnablePMTUBHDetect" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "SackOpts" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "DefaultTTL" -Value 64 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "TcpMaxDupAcks" -Value 2 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "Tcp1323Opts" -Value 1 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "MaxUserPort" -Value 65534 -Type DWord -Force
+Set-ItemProperty -Path $tcpParams -Name "TCPTimedWaitDelay" -Value 30 -Type DWord -Force
+
+Write-Host "  -> Network TCP autotuning normal, CUBIC, TIME_WAIT=30s, MaxUserPort=65534." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 4. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
+# 5. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
 # -------------------------------------------------------------
-Write-Host "[4/6] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
+Write-Host "[5/7] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
 
 $dataCollKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
 if (-not (Test-Path $dataCollKey)) { New-Item -Path $dataCollKey -Force | Out-Null }
@@ -175,26 +215,19 @@ Set-ItemProperty -Path $cdmKey -Name "SystemPaneSuggestionsEnabled" -Value 0 -Ty
 Set-ItemProperty -Path $cdmKey -Name "SubscribedContent-338388Enabled" -Value 0 -Type DWord -Force
 Set-ItemProperty -Path $cdmKey -Name "SubscribedContent-338389Enabled" -Value 0 -Type DWord -Force
 
-Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforced." -ForegroundColor Gray
-
-# -------------------------------------------------------------
-# 5. UI SNAPPINESS & LATENCY REDUCTION
-# -------------------------------------------------------------
-Write-Host "[5/6] Minimizing UI Latency & Menu Delays..." -ForegroundColor Green
-
+# UI Snappiness (0ms menu delay)
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Type String -Force
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value "1" -Type String -Force
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WaitToKillAppTimeout" -Value "2000" -Type String -Force
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Value "1000" -Type String -Force
 
-Write-Host "  -> MenuShowDelay set to 0ms (Instant context and menu rendering)." -ForegroundColor Gray
+Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforced, MenuShowDelay=0ms." -ForegroundColor Gray
 
 # -------------------------------------------------------------
 # 6. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
 # -------------------------------------------------------------
-Write-Host "[6/6] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
+Write-Host "[6/7] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
 
-# Exactly the 47 Windows internal services configured as Disabled on your system
 $windowsServicesToDisable = @(
     "AppMgmt",                 # Application Management
     "AppVClient",              # Microsoft App-V Client
@@ -262,12 +295,28 @@ if (Get-Service -Name "lfsvc" -ErrorAction SilentlyContinue) {
 
 Write-Host "  -> Trimmed $disabledCount built-in Windows services to Disabled." -ForegroundColor Gray
 
+# -------------------------------------------------------------
+# 7. CLEAN STARTUP AND EDGE BACKGROUND RUNNERS
+# -------------------------------------------------------------
+Write-Host "[7/7] Disabling Headless Browser Runners & Startup Overhead..." -ForegroundColor Green
+
+# Edge background process prevention
+$edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+if (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
+Set-ItemProperty -Path $edgeKey -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+
+# Chrome background process prevention
+$chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
+if (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
+Set-ItemProperty -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+
 Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "       Minimal Windows Setup Completed Successfully!       " -ForegroundColor Yellow
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "Your PC is configured for ultra-low process/handle count," -ForegroundColor Cyan
-Write-Host "your exact 34 curated power settings, and low-latency gaming." -ForegroundColor Cyan
+Write-Host "your exact 34 curated power settings, DirectFlip, and low-latency gaming." -ForegroundColor Cyan
 Write-Host ""
 
 if (-not $SkipReboot) {
