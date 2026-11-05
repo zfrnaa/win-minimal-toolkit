@@ -1,4 +1,4 @@
-# Windows Minimal & High-Performance Setup ⚡
+# win-minimal-toolkit ⚡
 
 A clean, declarative, reproducible PowerShell setup to transform a stock Windows 11 installation into a lean, minimal, low-latency environment with an idle baseline of **~130–140 processes** (down from 250–350+ out-of-the-box).
 
