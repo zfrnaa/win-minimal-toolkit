@@ -3,16 +3,27 @@
     Optimize-WindowsPostInstall.ps1 - Automated Windows 11 Minimal & High-Performance Setup
 .DESCRIPTION
     Replicates your exact 139-process, low-latency, zero-bloat Windows environment:
-      1. Unhides specifically your 34 curated Advanced Power Plan settings.
-      2. Activates High Performance power scheme.
-      3. Advanced TCP/IP stack optimization (CUBIC, RSS, RSC, TimedWaitDelay, MaxUserPort, Fast Retransmit).
-      4. Gaming, MMCSS & Low-Latency DirectFlip (SystemResponsiveness=10, Windows Game Mode=ON, AlwaysUseDirectFlip, AllowTearing, Latency Sensitive).
-      5. Kernel & Memory Management (DisablePagingExecutive=1, MemoryCompression=False, Win32PrioritySeparation=38, 1:1 Mouse Input).
-      6. Security & Hypervisor Prompt (Interactive optional prompt for VBS & Secure Boot with pros/cons description).
-      7. Memory Integrity / HVCI Disabled & Resizable BAR enforcement.
-      8. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
-      9. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
-      10. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
+      1. Hardware Chassis Detection (Laptop vs Desktop) with interactive prompt or auto-override.
+         - If Desktop: Sets CoalescingTimerInterval = 0x0 and HibernateEnabled = 0x0.
+      2. Unhides specifically your 34 curated Advanced Power Plan settings.
+      3. Activates High Performance power scheme.
+      4. Gaming, MMCSS & Low-Latency DirectFlip:
+         - Games task: Affinity=0x0, Background Only="False" (String), Clock Rate=0x2710 (10000),
+           SFIO Priority="High" (String), Scheduling Category="High" (String), Latency Sensitive="True" (String).
+         - DirectFlip, AllowTearing, SystemResponsiveness=0xa (10), Game Mode=ON.
+      5. Kernel, DPC & Memory Management:
+         - Session Manager\kernel: DebugPollInterval=0x3e8 (1000), DpcWatchdogProfileOffset=0x2710 (10000),
+           ThreadDpcEnable=0x0, KernelSEHOPEnabled=0x0.
+         - Memory Management: LargeSystemCache=0x0, SecondLevelDataCache=0x0, DisablePagingExecutive=0x1,
+           IoPageLockLimit=0x8000000, MemoryCompression=False.
+         - PriorityControl: Win32PrioritySeparation=0x26 (38).
+         - Raw 1:1 Mouse Input without acceleration.
+      6. Memory Integrity (HVCI) Disabled & Resizable BAR enforcement.
+      7. Security & Hypervisor Prompt (Interactive optional prompt for VBS & Secure Boot with pros/cons).
+      8. Advanced TCP/IP Stack Optimization (CUBIC, RSS, RSC, TimedWaitDelay=0x1e (30), MaxUserPort=0xfffe (65534)).
+      9. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
+      10. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
+      11. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
 .NOTES
     Run in an elevated PowerShell session (Run as Administrator) after a fresh install.
 #>
@@ -20,7 +31,9 @@
 [CmdletBinding()]
 param(
     [switch]$SkipReboot,
-    [switch]$ForceDisableVBS
+    [switch]$ForceDisableVBS,
+    [ValidateSet("Desktop", "Laptop", "Auto")]
+    [string]$DeviceType = "Auto"
 )
 
 # Ensure script is running with Administrator privileges
@@ -35,10 +48,67 @@ Write-Host "   Windows Minimal & High-Performance Post-Install Setup   " -Foregr
 Write-Host "===========================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Helper function to safely set or update registry values without blind overwrites
+function Set-RegistryValueSafe {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory=$true)]$Value,
+        [Parameter(Mandatory=$true)][Microsoft.Win32.RegistryValueKind]$PropertyType
+    )
+    if (-not (Test-Path $Path)) {
+        New-Item -Path $Path -Force | Out-Null
+    }
+    Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $PropertyType -Force
+}
+
 # -------------------------------------------------------------
-# 1. UNHIDE SPECIFIC CURATED ADVANCED POWER SETTINGS (34 SETTINGS)
+# 1. HARDWARE CHASSIS DECISION: LAPTOP VS DESKTOP
 # -------------------------------------------------------------
-Write-Host "[1/8] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
+Write-Host "[1/9] Determining Device Form Factor (Laptop vs Desktop)..." -ForegroundColor Green
+
+# Auto-detect via Win32_SystemEnclosure ChassisTypes
+# Common laptop chassis types: 8, 9, 10, 11, 12, 14, 18, 21, 31, 32
+$detectedIsLaptop = $false
+try {
+    $chassis = (Get-CimInstance -ClassName Win32_SystemEnclosure -ErrorAction SilentlyContinue).ChassisTypes
+    if ($chassis -and ($chassis | Where-Object { $_ -in @(8, 9, 10, 11, 12, 14, 18, 21, 31, 32) })) {
+        $detectedIsLaptop = $true
+    }
+} catch {}
+
+$targetDeviceType = $DeviceType
+if ($targetDeviceType -eq "Auto") {
+    $defaultChoice = if ($detectedIsLaptop) { "L" } else { "D" }
+    $defaultLabel = if ($detectedIsLaptop) { "Laptop" } else { "Desktop" }
+    Write-Host "  Detected hardware type: $defaultLabel" -ForegroundColor Yellow
+    $ans = Read-Host "  Configure for [D]esktop or [L]aptop? (Default: $defaultChoice)"
+    if ($ans.Trim().ToUpper() -eq "D") {
+        $targetDeviceType = "Desktop"
+    } elseif ($ans.Trim().ToUpper() -eq "L") {
+        $targetDeviceType = "Laptop"
+    } else {
+        $targetDeviceType = $defaultLabel
+    }
+}
+
+Write-Host "  -> Selected Mode: $targetDeviceType" -ForegroundColor Cyan
+
+if ($targetDeviceType -eq "Desktop") {
+    Write-Host "  -> Applying Desktop-specific Power optimizations..." -ForegroundColor Gray
+    # Desktops have permanent wall power: disable coalescing timer and hibernation to eliminate timer jitter and disk wear
+    Set-RegistryValueSafe -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "CoalescingTimerInterval" -Value 0x0 -PropertyType DWord
+    Set-RegistryValueSafe -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "HibernateEnabled" -Value 0x0 -PropertyType DWord
+    Write-Host "     [+] CoalescingTimerInterval = 0x0 (Disabled timer coalescing for minimal latency)" -ForegroundColor Gray
+    Write-Host "     [+] HibernateEnabled = 0x0 (Hibernation disabled on Desktop)" -ForegroundColor Gray
+} else {
+    Write-Host "  -> Laptop mode active: Preserving battery timer coalescing and lid/hibernation states." -ForegroundColor Gray
+}
+
+# -------------------------------------------------------------
+# 2. UNHIDE SPECIFIC CURATED ADVANCED POWER SETTINGS (34 SETTINGS)
+# -------------------------------------------------------------
+Write-Host "[2/9] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
 
 $curatedPowerSettings = @(
     # Hard Disk: Turn off hard disk after
@@ -93,7 +163,7 @@ $unhiddenCount = 0
 foreach ($item in $curatedPowerSettings) {
     $targetPath = Join-Path (Join-Path $basePowerKey $item.Sub) $item.Setting
     if (Test-Path $targetPath) {
-        Set-ItemProperty -Path $targetPath -Name "Attributes" -Value 2 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-RegistryValueSafe -Path $targetPath -Name "Attributes" -Value 0x2 -PropertyType DWord
         $unhiddenCount++
     }
 }
@@ -104,90 +174,92 @@ powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 Write-Host "  -> Activated High Performance Power Scheme." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 2. GAMING, WINDOWS GAME MODE & LOW-LATENCY DIRECTFLIP
+# 3. GAMING, WINDOWS GAME MODE & LOW-LATENCY DIRECTFLIP
 # -------------------------------------------------------------
-Write-Host "[2/8] Enabling Windows Game Mode & Low-Latency DirectFlip..." -ForegroundColor Green
+Write-Host "[3/9] Configuring Windows Game Mode & Low-Latency DirectFlip..." -ForegroundColor Green
 
 # Windows Game Mode = ON
-$gameBarPath = "HKCU:\Software\Microsoft\GameBar"
-if (-not (Test-Path $gameBarPath)) { New-Item -Path $gameBarPath -Force | Out-Null }
-Set-ItemProperty -Path $gameBarPath -Name "AutoGameModeEnabled" -Value 1 -Type DWord -Force
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\GameBar" -Name "AutoGameModeEnabled" -Value 0x1 -PropertyType DWord
 
 # Disable GameDVR background recording overhead
 $gameConfigPath = "HKCU:\System\GameConfigStore"
-if (-not (Test-Path $gameConfigPath)) { New-Item -Path $gameConfigPath -Force | Out-Null }
-Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_Enabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_FSEBehaviorMode" -Value 2 -Type DWord -Force
-Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_HonorUserFSEBehaviorMode" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $gameConfigPath -Name "GameDVR_FSEBehavior" -Value 2 -Type DWord -Force
+Set-RegistryValueSafe -Path $gameConfigPath -Name "GameDVR_Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $gameConfigPath -Name "GameDVR_FSEBehaviorMode" -Value 0x2 -PropertyType DWord
+Set-RegistryValueSafe -Path $gameConfigPath -Name "GameDVR_HonorUserFSEBehaviorMode" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $gameConfigPath -Name "GameDVR_FSEBehavior" -Value 0x2 -PropertyType DWord
 
 $allowGameDvr = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
-if (-not (Test-Path $allowGameDvr)) { New-Item -Path $allowGameDvr -Force | Out-Null }
-Set-ItemProperty -Path $allowGameDvr -Name "AllowGameDVR" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $allowGameDvr -Name "AllowGameDVR" -Value 0x0 -PropertyType DWord
 
 # Multimedia Class Scheduler Service (MMCSS) & Low Latency DirectFlip
 $systemProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-if (-not (Test-Path $systemProfile)) { New-Item -Path $systemProfile -Force | Out-Null }
-Set-ItemProperty -Path $systemProfile -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "SystemResponsiveness" -Value 10 -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "EnableMMCSS" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "AlwaysUseDirectFlip" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "AllowTearing" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "AlwaysOn" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $systemProfile -Name "NoLazyMode" -Value 1 -Type DWord -Force
+Set-RegistryValueSafe -Path $systemProfile -Name "NetworkThrottlingIndex" -Value 0xffffffff -PropertyType DWord
+Set-RegistryValueSafe -Path $systemProfile -Name "SystemResponsiveness" -Value 0xa -PropertyType DWord # 0xa = 10
+Set-RegistryValueSafe -Path $systemProfile -Name "EnableMMCSS" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $systemProfile -Name "AlwaysUseDirectFlip" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $systemProfile -Name "AllowTearing" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $systemProfile -Name "AlwaysOn" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $systemProfile -Name "NoLazyMode" -Value 0x1 -PropertyType DWord
 
+# Tasks\Games registry configuration
 $tasksGames = "$systemProfile\Tasks\Games"
-if (-not (Test-Path $tasksGames)) { New-Item -Path $tasksGames -Force | Out-Null }
-Set-ItemProperty -Path $tasksGames -Name "Affinity" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $tasksGames -Name "Background Only" -Value "False" -Type String -Force
-Set-ItemProperty -Path $tasksGames -Name "Clock Rate" -Value 10000 -Type DWord -Force
-Set-ItemProperty -Path $tasksGames -Name "GPU Priority" -Value 8 -Type DWord -Force
-Set-ItemProperty -Path $tasksGames -Name "Priority" -Value 6 -Type DWord -Force
-Set-ItemProperty -Path $tasksGames -Name "Scheduling Category" -Value "High" -Type String -Force
-Set-ItemProperty -Path $tasksGames -Name "SFIO Priority" -Value "High" -Type String -Force
-Set-ItemProperty -Path $tasksGames -Name "Latency Sensitive" -Value "True" -Type String -Force
+Set-RegistryValueSafe -Path $tasksGames -Name "Affinity" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $tasksGames -Name "Background Only" -Value "False" -PropertyType String
+Set-RegistryValueSafe -Path $tasksGames -Name "Clock Rate" -Value 0x2710 -PropertyType DWord # 0x2710 = 10000
+Set-RegistryValueSafe -Path $tasksGames -Name "GPU Priority" -Value 0x8 -PropertyType DWord
+Set-RegistryValueSafe -Path $tasksGames -Name "Priority" -Value 0x6 -PropertyType DWord
+Set-RegistryValueSafe -Path $tasksGames -Name "Scheduling Category" -Value "High" -PropertyType String
+Set-RegistryValueSafe -Path $tasksGames -Name "SFIO Priority" -Value "High" -PropertyType String
+Set-RegistryValueSafe -Path $tasksGames -Name "Latency Sensitive" -Value "True" -PropertyType String
 
-Write-Host "  -> Game Mode = ON, MMCSS gaming priority, DirectFlip, and latency-sensitive scheduling applied." -ForegroundColor Gray
+Write-Host "  -> Game Mode ON, Games task (Clock Rate=0x2710, SFIO=High, Scheduling=High, Background Only=False)." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 3. KERNEL, MEMORY MANAGEMENT, COMPRESSION & MOUSE INPUT LATENCY
+# 4. KERNEL DPC/INTERRUPT & MEMORY MANAGEMENT TUNING
 # -------------------------------------------------------------
-Write-Host "[3/8] Tuning Kernel Priority, Memory Compression & Mouse..." -ForegroundColor Green
+Write-Host "[4/9] Tuning Kernel Session Manager, DPC Watchdog & Memory Management..." -ForegroundColor Green
 
-# Disable Windows Memory Compression (Frees CPU cycles on systems with 16GB-32GB RAM)
+# Session Manager\kernel parameters
+$smKernel = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel"
+Set-RegistryValueSafe -Path $smKernel -Name "DebugPollInterval" -Value 0x3e8 -PropertyType DWord # 0x3e8 = 1000
+Set-RegistryValueSafe -Path $smKernel -Name "DpcWatchdogProfileOffset" -Value 0x2710 -PropertyType DWord # 0x2710 = 10000
+Set-RegistryValueSafe -Path $smKernel -Name "ThreadDpcEnable" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $smKernel -Name "KernelSEHOPEnabled" -Value 0x0 -PropertyType DWord
+
+# Session Manager\Memory Management
+$memMgmtPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
+Set-RegistryValueSafe -Path $memMgmtPath -Name "LargeSystemCache" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $memMgmtPath -Name "SecondLevelDataCache" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $memMgmtPath -Name "DisablePagingExecutive" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $memMgmtPath -Name "IoPageLockLimit" -Value 0x8000000 -PropertyType DWord # 128 MB
+
+# Disable Windows Memory Compression (Frees CPU cycles on 16GB-32GB+ RAM)
 try {
     Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
     Disable-MMAgent -PageCombining -ErrorAction SilentlyContinue
 } catch {}
 
 # CPU Quantum / Priority Separation (0x26 = 38: Short, variable foreground quantum)
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
-
-# Memory Management (Lock kernel in RAM, increase I/O page lock limit)
-$memMgmtPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
-Set-ItemProperty -Path $memMgmtPath -Name "DisablePagingExecutive" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $memMgmtPath -Name "LargeSystemCache" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $memMgmtPath -Name "IoPageLockLimit" -Value 134217728 -Type DWord -Force
+Set-RegistryValueSafe -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 0x26 -PropertyType DWord
 
 # Raw 1:1 Mouse Input (Disables Enhanced Pointer Precision / Acceleration)
 $mouseKey = "HKCU:\Control Panel\Mouse"
-Set-ItemProperty -Path $mouseKey -Name "MouseSpeed" -Value "0" -Type String -Force
-Set-ItemProperty -Path $mouseKey -Name "MouseThreshold1" -Value "0" -Type String -Force
-Set-ItemProperty -Path $mouseKey -Name "MouseThreshold2" -Value "0" -Type String -Force
+Set-RegistryValueSafe -Path $mouseKey -Name "MouseSpeed" -Value "0" -PropertyType String
+Set-RegistryValueSafe -Path $mouseKey -Name "MouseThreshold1" -Value "0" -PropertyType String
+Set-RegistryValueSafe -Path $mouseKey -Name "MouseThreshold2" -Value "0" -PropertyType String
 
-Write-Host "  -> Memory compression disabled, Win32PrioritySeparation 38, DisablePagingExecutive, and 1:1 Mouse." -ForegroundColor Gray
+Write-Host "  -> Kernel (DebugPollInterval=0x3e8, DpcOffset=0x2710, ThreadDpc=0x0, SEHOP=0x0)." -ForegroundColor Gray
+Write-Host "  -> Memory (LargeSystemCache=0x0, SecondLevelDataCache=0x0, DisablePagingExecutive=0x1)." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 4. MEMORY INTEGRITY (HVCI) & RESIZABLE BAR
+# 5. MEMORY INTEGRITY (HVCI) & RESIZABLE BAR
 # -------------------------------------------------------------
-Write-Host "[4/8] Disabling Memory Integrity (HVCI) & Enabling Resizable BAR..." -ForegroundColor Green
+Write-Host "[5/9] Disabling Memory Integrity (HVCI) & Enabling Resizable BAR..." -ForegroundColor Green
 
 # Disable Memory Integrity (Core Isolation / HVCI)
-# Impact: Eliminates hypervisor code checking overhead, reduces stuttering in games.
 $hvciPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity"
-if (-not (Test-Path $hvciPath)) { New-Item -Path $hvciPath -Force | Out-Null }
-Set-ItemProperty -Path $hvciPath -Name "Enabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $hvciPath -Name "HVCIMATRequired" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $hvciPath -Name "Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $hvciPath -Name "HVCIMATRequired" -Value 0x0 -PropertyType DWord
 
 # Enforce Resizable BAR in driver registry if supported
 $gpuClassKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
@@ -195,17 +267,17 @@ if (Test-Path $gpuClassKey) {
     Get-ChildItem $gpuClassKey -ErrorAction SilentlyContinue | ForEach-Object {
         $driverDesc = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).DriverDesc
         if ($driverDesc -like "*NVIDIA*") {
-            Set-ItemProperty -Path $_.PSPath -Name "MemoryManagement.ReBar" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path $_.PSPath -Name "RMReBar" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-RegistryValueSafe -Path $_.PSPath -Name "MemoryManagement.ReBar" -Value 0x1 -PropertyType DWord
+            Set-RegistryValueSafe -Path $_.PSPath -Name "RMReBar" -Value 0x1 -PropertyType DWord
         }
     }
 }
 Write-Host "  -> Memory Integrity (HVCI) disabled. Resizable BAR driver flags configured." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 5. OPTIONAL: VBS (VIRTUALIZATION-BASED SECURITY) & SECURE BOOT
+# 6. OPTIONAL: VBS (VIRTUALIZATION-BASED SECURITY) & SECURE BOOT
 # -------------------------------------------------------------
-Write-Host "[5/8] Checking Virtualization-Based Security (VBS) & Secure Boot..." -ForegroundColor Green
+Write-Host "[6/9] Checking Virtualization-Based Security (VBS) & Secure Boot..." -ForegroundColor Green
 
 $disableVBSChoice = $false
 if ($ForceDisableVBS) {
@@ -226,13 +298,10 @@ if ($ForceDisableVBS) {
 }
 
 if ($disableVBSChoice) {
-    # Disable VBS via Registry
     $dgPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard"
-    if (-not (Test-Path $dgPath)) { New-Item -Path $dgPath -Force | Out-Null }
-    Set-ItemProperty -Path $dgPath -Name "EnableVirtualizationBasedSecurity" -Value 0 -Type DWord -Force
-    Set-ItemProperty -Path $dgPath -Name "RequirePlatformSecurityFeatures" -Value 0 -Type DWord -Force
+    Set-RegistryValueSafe -Path $dgPath -Name "EnableVirtualizationBasedSecurity" -Value 0x0 -PropertyType DWord
+    Set-RegistryValueSafe -Path $dgPath -Name "RequirePlatformSecurityFeatures" -Value 0x0 -PropertyType DWord
 
-    # Disable hypervisor launch type in BCD
     bcdedit /set hypervisorlaunchtype off | Out-Null
     Write-Host "  -> Virtualization-Based Security (VBS) disabled." -ForegroundColor Green
 } else {
@@ -240,9 +309,9 @@ if ($disableVBSChoice) {
 }
 
 # -------------------------------------------------------------
-# 6. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
+# 7. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
 # -------------------------------------------------------------
-Write-Host "[6/8] Tuning Network TCP Stack for Low Ping & Fast Socket Recycling..." -ForegroundColor Green
+Write-Host "[7/9] Tuning Network TCP Stack for Low Ping & Fast Socket Recycling..." -ForegroundColor Green
 
 # Netsh TCP Global
 netsh int tcp set global autotuninglevel=normal | Out-Null
@@ -256,63 +325,58 @@ netsh int tcp set supplemental template=datacenter congestionprovider=cubic | Ou
 
 # Advanced TCP/IP Parameters in Registry
 $tcpParams = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
-Set-ItemProperty -Path $tcpParams -Name "EnablePMTUDiscovery" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "EnablePMTUBHDetect" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "SackOpts" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "DefaultTTL" -Value 64 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "TcpMaxDupAcks" -Value 2 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "Tcp1323Opts" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "MaxUserPort" -Value 65534 -Type DWord -Force
-Set-ItemProperty -Path $tcpParams -Name "TCPTimedWaitDelay" -Value 30 -Type DWord -Force
+Set-RegistryValueSafe -Path $tcpParams -Name "EnablePMTUDiscovery" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $tcpParams -Name "EnablePMTUBHDetect" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $tcpParams -Name "SackOpts" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $tcpParams -Name "DefaultTTL" -Value 0x40 -PropertyType DWord # 0x40 = 64
+Set-RegistryValueSafe -Path $tcpParams -Name "TcpMaxDupAcks" -Value 0x2 -PropertyType DWord
+Set-RegistryValueSafe -Path $tcpParams -Name "Tcp1323Opts" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $tcpParams -Name "MaxUserPort" -Value 0xfffe -PropertyType DWord # 0xfffe = 65534
+Set-RegistryValueSafe -Path $tcpParams -Name "TCPTimedWaitDelay" -Value 0x1e -PropertyType DWord # 0x1e = 30
 
-Write-Host "  -> Network TCP autotuning normal, CUBIC, TIME_WAIT=30s, MaxUserPort=65534." -ForegroundColor Gray
+Write-Host "  -> Network TCP autotuning normal, CUBIC, TIME_WAIT=0x1e, MaxUserPort=0xfffe." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 7. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
+# 8. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
 # -------------------------------------------------------------
-Write-Host "[7/8] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
+Write-Host "[8/9] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
 
 $dataCollKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
-if (-not (Test-Path $dataCollKey)) { New-Item -Path $dataCollKey -Force | Out-Null }
-Set-ItemProperty -Path $dataCollKey -Name "AllowTelemetry" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $dataCollKey -Name "LimitDiagnosticLogCollection" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $dataCollKey -Name "LimitDumpCollection" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $dataCollKey -Name "AllowDeviceNameInTelemetry" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $dataCollKey -Name "AllowTelemetry" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $dataCollKey -Name "LimitDiagnosticLogCollection" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $dataCollKey -Name "LimitDumpCollection" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $dataCollKey -Name "AllowDeviceNameInTelemetry" -Value 0x0 -PropertyType DWord
 
 # Disable Widgets / News and Interests
 $dshKey = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
-if (-not (Test-Path $dshKey)) { New-Item -Path $dshKey -Force | Out-Null }
-Set-ItemProperty -Path $dshKey -Name "AllowNewsAndInterests" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $dshKey -Name "AllowNewsAndInterests" -Value 0x0 -PropertyType DWord
 
 # Disable Advertising ID & Content Delivery Manager Promos
 $cdmKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-if (-not (Test-Path $cdmKey)) { New-Item -Path $cdmKey -Force | Out-Null }
-Set-ItemProperty -Path $cdmKey -Name "SystemPaneSuggestionsEnabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $cdmKey -Name "SubscribedContent-338388Enabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $cdmKey -Name "SubscribedContent-338389Enabled" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $cdmKey -Name "SystemPaneSuggestionsEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338388Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338389Enabled" -Value 0x0 -PropertyType DWord
 
 # UI Snappiness (0ms menu delay)
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Type String -Force
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value "1" -Type String -Force
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WaitToKillAppTimeout" -Value "2000" -Type String -Force
-Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Value "1000" -Type String -Force
+Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value "0" -PropertyType String
+Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value "1" -PropertyType String
+Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "WaitToKillAppTimeout" -Value "2000" -PropertyType String
+Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Value "1000" -PropertyType String
 
 # Edge / Chrome background process prevention
 $edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-if (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
-Set-ItemProperty -Path $edgeKey -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $edgeKey -Name "StartupBoostEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
 
 $chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
-if (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
-Set-ItemProperty -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+Set-RegistryValueSafe -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
 
 Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforced, MenuShowDelay=0ms." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 8. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
+# 9. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
 # -------------------------------------------------------------
-Write-Host "[8/8] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
+Write-Host "[9/9] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
 
 $windowsServicesToDisable = @(
     "AppMgmt",                 # Application Management
