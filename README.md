@@ -74,14 +74,21 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 * `DefaultTTL = 0x40` (DWORD Hex 40 = Decimal 64).
 * `TcpMaxDupAcks = 0x2`, `SackOpts = 0x1`, `EnablePMTUDiscovery = 0x1`.
 
-### 8. Telemetry, Diagnostic & Promo Bloat Removal
-* Disables telemetry data collection (`AllowTelemetry = 0x0`).
-* Enforces dump and diagnostic log upload limits.
-* Disables Windows 11 lock screen tips, Start suggestions, and Consumer Experience auto-installs.
-* Disables Windows Widgets and News & Interests (`AllowNewsAndInterests = 0x0`).
+### 8. Telemetry, Copilot, Bing Search & Bloatware Elimination
+* **Windows Copilot Disabled:** Sets `TurnOffWindowsCopilot = 0x1` and hides the Copilot taskbar button (`ShowCopilotButton = 0x0`).
+* **Bing Web Search in Start Menu Disabled:** Sets `BingSearchEnabled = 0x0`, `DisableWebSearch = 0x1`, and `ConnectedSearchUseWeb = 0x0` to prevent Windows Start Menu from sending keystrokes and search queries to Bing.
+* **Windows Consumer Cloud Content Blocked:** Sets `DisableWindowsConsumerFeatures = 0x1` (stops fresh installs from auto-downloading TikTok, Instagram, Disney, etc.).
+* **User Activity Tracking / Timeline Uploads Disabled:** Sets `PublishUserActivities = 0x0` and `UploadUserActivities = 0x0`.
+* **Advertising ID & Suggestions Disabled:** Sets `AdvertisingInfo\Enabled = 0x0`, `TailoredExperiences = 0x0`, and disables lock screen tips/promos.
+* **Taskbar Clutter Cleaned:** Hides Task View button (`ShowTaskViewButton = 0x0`), Widgets (`AllowNewsAndInterests = 0x0`), and Chat/Teams (`TaskbarMn = 0x0`).
+* **File Explorer Power User Defaults:** `HideFileExt = 0x0` (Always show file extensions), `Hidden = 0x1` (Show hidden files).
 * Sets `MenuShowDelay = "0"` for instantaneous right-click and menu rendering.
 
-### 9. Pure Windows Internal Service Trimming (47 Exact Services)
+### 9. Out-of-the-Box Bloatware App Removal (UWP)
+* Removes unused stock packages that are stripped from your current lean install:
+  * `BingNews`, `BingWeather`, `GamingApp`, `GetHelp`, `Getstarted`, `OfficeHub`, `SolitaireCollection`, `People`, `Todos`, `FeedbackHub`, `WindowsMaps`, `YourPhone`, `ZuneMusic`, `ZuneVideo`, `Clipchamp`.
+
+### 10. Pure Windows Internal Service Trimming (47 Exact Services)
 * Contains **zero third-party software services** — only pure Windows internal services.
 * Sets all 47 Windows daemons that cause process bloat to `Disabled` (e.g., `DiagTrack`, `SysMain`, `WSearch`, `WerSvc`, `PcaSvc`, `DPS`, `TrkWks`, `WalletService`, `CscService`, `TermService`).
 * Sets `lfsvc` (Geolocation) to `Manual`.

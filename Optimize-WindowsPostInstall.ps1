@@ -337,46 +337,108 @@ Set-RegistryValueSafe -Path $tcpParams -Name "TCPTimedWaitDelay" -Value 0x1e -Pr
 Write-Host "  -> Network TCP autotuning normal, CUBIC, TIME_WAIT=0x1e, MaxUserPort=0xfffe." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 8. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
+# 8. TELEMETRY, COPILOT, PROMOTIONS & BLOATWARE ELIMINATION
 # -------------------------------------------------------------
-Write-Host "[8/9] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
+Write-Host "[8/10] Disabling Windows Copilot, Bing Web Search, Cloud Bloat & Telemetry..." -ForegroundColor Green
 
+# 1. Disable Windows Copilot
+Set-RegistryValueSafe -Path "HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ShowCopilotButton" -Value 0x0 -PropertyType DWord
+
+# 2. Disable Bing Search in Windows Start Menu (Stops Edge background telemetry when typing)
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "DisableWebSearch" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "ConnectedSearchUseWeb" -Value 0x0 -PropertyType DWord
+
+# 3. Disable Windows Consumer Features & Cloud Content (Prevents TikTok, CandyCrush auto-downloads on fresh install)
+$cloudKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent"
+Set-RegistryValueSafe -Path $cloudKey -Name "DisableWindowsConsumerFeatures" -Value 0x1 -PropertyType DWord
+Set-RegistryValueSafe -Path $cloudKey -Name "DisableCloudOptimizedContent" -Value 0x1 -PropertyType DWord
+
+# 4. Disable User Activity Tracking & Timeline Uploads
+$sysPolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
+Set-RegistryValueSafe -Path $sysPolicyKey -Name "PublishUserActivities" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $sysPolicyKey -Name "UploadUserActivities" -Value 0x0 -PropertyType DWord
+
+# 5. Disable Advertising ID & Tailored Experiences
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" -Name "TailoredExperiencesWithDiagnosticDataEnabled" -Value 0x0 -PropertyType DWord
+
+# 6. Disable Lock Screen Promos & Content Delivery Suggestions
+$cdmKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+Set-RegistryValueSafe -Path $cdmKey -Name "FeatureManagementEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "RotatingLockScreenEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "RotatingLockScreenOverlayEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SoftLandingEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SystemPaneSuggestionsEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338387Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338388Enabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338389Enabled" -Value 0x0 -PropertyType DWord
+
+# 7. Disable Windows Widgets & Taskbar Clutter
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Dsh" -Name "AllowNewsAndInterests" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ShowTaskViewButton" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarMn" -Value 0x0 -PropertyType DWord # Chat/Teams button
+
+# 8. File Explorer Power User Defaults (Show file extensions, show hidden files)
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "HideFileExt" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "Hidden" -Value 0x1 -PropertyType DWord
+
+# 9. Telemetry Data Collection Restrictions
 $dataCollKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
 Set-RegistryValueSafe -Path $dataCollKey -Name "AllowTelemetry" -Value 0x0 -PropertyType DWord
 Set-RegistryValueSafe -Path $dataCollKey -Name "LimitDiagnosticLogCollection" -Value 0x1 -PropertyType DWord
 Set-RegistryValueSafe -Path $dataCollKey -Name "LimitDumpCollection" -Value 0x1 -PropertyType DWord
 Set-RegistryValueSafe -Path $dataCollKey -Name "AllowDeviceNameInTelemetry" -Value 0x0 -PropertyType DWord
 
-# Disable Widgets / News and Interests
-$dshKey = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
-Set-RegistryValueSafe -Path $dshKey -Name "AllowNewsAndInterests" -Value 0x0 -PropertyType DWord
-
-# Disable Advertising ID & Content Delivery Manager Promos
-$cdmKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-Set-RegistryValueSafe -Path $cdmKey -Name "SystemPaneSuggestionsEnabled" -Value 0x0 -PropertyType DWord
-Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338388Enabled" -Value 0x0 -PropertyType DWord
-Set-RegistryValueSafe -Path $cdmKey -Name "SubscribedContent-338389Enabled" -Value 0x0 -PropertyType DWord
-
-# UI Snappiness (0ms menu delay)
+# 10. UI Snappiness (0ms menu delay)
 Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value "0" -PropertyType String
 Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value "1" -PropertyType String
 Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "WaitToKillAppTimeout" -Value "2000" -PropertyType String
 Set-RegistryValueSafe -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Value "1000" -PropertyType String
 
-# Edge / Chrome background process prevention
-$edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-Set-RegistryValueSafe -Path $edgeKey -Name "StartupBoostEnabled" -Value 0x0 -PropertyType DWord
-Set-RegistryValueSafe -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
+# 11. Edge & Chrome Background Process Prevention
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "StartupBoostEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
+Set-RegistryValueSafe -Path "HKLM:\SOFTWARE\Policies\Google\Chrome" -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
 
-$chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
-Set-RegistryValueSafe -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0x0 -PropertyType DWord
-
-Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforced, MenuShowDelay=0ms." -ForegroundColor Gray
+Write-Host "  -> Copilot disabled, Bing search off, Cloud bloat blocked, Advertising ID & Telemetry off." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 9. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
+# 9. DEBLOAT UWP PACKAGES (STOCK BLOAT REMOVAL)
 # -------------------------------------------------------------
-Write-Host "[9/9] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
+Write-Host "[9/10] Removing Out-of-the-Box Windows Bloatware Apps..." -ForegroundColor Green
+
+# Packages that are currently uninstalled / missing from your lean Windows install
+$stockBloatPackages = @(
+    "Microsoft.BingNews",
+    "Microsoft.BingWeather",
+    "Microsoft.GamingApp",
+    "Microsoft.GetHelp",
+    "Microsoft.Getstarted",
+    "Microsoft.MicrosoftOfficeHub",
+    "Microsoft.MicrosoftSolitaireCollection",
+    "Microsoft.People",
+    "Microsoft.Todos",
+    "Microsoft.WindowsFeedbackHub",
+    "Microsoft.WindowsMaps",
+    "Microsoft.YourPhone",
+    "Microsoft.ZuneMusic",
+    "Microsoft.ZuneVideo",
+    "Clipchamp.Clipchamp"
+)
+
+foreach ($pkg in $stockBloatPackages) {
+    Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue | Remove-AppxPackage -ErrorAction SilentlyContinue
+}
+Write-Host "  -> Stock bloatware apps (Cortana/Solitaire/News/FeedbackHub/Maps) purged." -ForegroundColor Gray
+
+# -------------------------------------------------------------
+# 10. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
+# -------------------------------------------------------------
+Write-Host "[10/10] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
 
 $windowsServicesToDisable = @(
     "AppMgmt",                 # Application Management
