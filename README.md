@@ -28,6 +28,7 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 * **HAGS (Hardware-Accelerated GPU Scheduling) is left untouched / disabled** per system preference.
 
 ### 3. Kernel, Memory Management & 1:1 Mouse Input
+* `Disable-MMAgent -MemoryCompression`: **Disables Windows Memory Compression** (`MemoryCompression = False`) and Page Combining. Since your PC has plenty of RAM (32 GB), turning this off eliminates the constant CPU overhead of compressing/decompressing memory pages in the background.
 * `Win32PrioritySeparation = 38` (`0x26`): Short, variable high-priority quantum favoring foreground gaming loops.
 * `DisablePagingExecutive = 1`: Keeps drivers and Windows kernel locked in physical RAM instead of paging to disk.
 * `IoPageLockLimit = 134217728` (128 MB): Expands the I/O lock buffer for high disk/network transfer rates.

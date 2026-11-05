@@ -142,9 +142,17 @@ Set-ItemProperty -Path $tasksGames -Name "Latency Sensitive" -Value "True" -Type
 Write-Host "  -> MMCSS gaming priority, DirectFlip, and latency-sensitive scheduling applied." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 3. KERNEL, MEMORY MANAGEMENT & MOUSE INPUT LATENCY
+# 3. KERNEL, MEMORY MANAGEMENT, COMPRESSION & MOUSE INPUT LATENCY
 # -------------------------------------------------------------
-Write-Host "[3/7] Tuning Kernel Priority, Memory Management & Mouse..." -ForegroundColor Green
+Write-Host "[3/7] Tuning Kernel Priority, Memory Compression & Mouse..." -ForegroundColor Green
+
+# Disable Windows Memory Compression (Frees CPU cycles on systems with 16GB-32GB RAM)
+try {
+    Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
+    Disable-MMAgent -PageCombining -ErrorAction SilentlyContinue
+} catch {
+    # Non-critical if cmdlet is restricted
+}
 
 # CPU Quantum / Priority Separation (0x26 = 38: Short, variable foreground quantum)
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
@@ -161,7 +169,7 @@ Set-ItemProperty -Path $mouseKey -Name "MouseSpeed" -Value "0" -Type String -For
 Set-ItemProperty -Path $mouseKey -Name "MouseThreshold1" -Value "0" -Type String -Force
 Set-ItemProperty -Path $mouseKey -Name "MouseThreshold2" -Value "0" -Type String -Force
 
-Write-Host "  -> Win32PrioritySeparation 38, DisablePagingExecutive, and 1:1 Mouse Input configured." -ForegroundColor Gray
+Write-Host "  -> Memory compression disabled, Win32PrioritySeparation 38, DisablePagingExecutive, and 1:1 Mouse." -ForegroundColor Gray
 
 # -------------------------------------------------------------
 # 4. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
