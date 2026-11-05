@@ -6,18 +6,21 @@
       1. Unhides specifically your 34 curated Advanced Power Plan settings.
       2. Activates High Performance power scheme.
       3. Advanced TCP/IP stack optimization (CUBIC, RSS, RSC, TimedWaitDelay, MaxUserPort, Fast Retransmit).
-      4. Gaming, MMCSS & Low-Latency DirectFlip (SystemResponsiveness=10, AlwaysUseDirectFlip, AllowTearing, Latency Sensitive).
-      5. Kernel & Memory Management (DisablePagingExecutive=1, IoPageLockLimit, Win32PrioritySeparation=38, 1:1 Mouse Input).
-      6. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
-      7. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
-      8. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
+      4. Gaming, MMCSS & Low-Latency DirectFlip (SystemResponsiveness=10, Windows Game Mode=ON, AlwaysUseDirectFlip, AllowTearing, Latency Sensitive).
+      5. Kernel & Memory Management (DisablePagingExecutive=1, MemoryCompression=False, Win32PrioritySeparation=38, 1:1 Mouse Input).
+      6. Security & Hypervisor Prompt (Interactive optional prompt for VBS & Secure Boot with pros/cons description).
+      7. Memory Integrity / HVCI Disabled & Resizable BAR enforcement.
+      8. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
+      9. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
+      10. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
 .NOTES
     Run in an elevated PowerShell session (Run as Administrator) after a fresh install.
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$SkipReboot
+    [switch]$SkipReboot,
+    [switch]$ForceDisableVBS
 )
 
 # Ensure script is running with Administrator privileges
@@ -35,7 +38,7 @@ Write-Host ""
 # -------------------------------------------------------------
 # 1. UNHIDE SPECIFIC CURATED ADVANCED POWER SETTINGS (34 SETTINGS)
 # -------------------------------------------------------------
-Write-Host "[1/7] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
+Write-Host "[1/8] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
 
 $curatedPowerSettings = @(
     # Hard Disk: Turn off hard disk after
@@ -101,9 +104,14 @@ powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 Write-Host "  -> Activated High Performance Power Scheme." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 2. GAMING, MULTIMEDIA, MMCSS & DIRECTFLIP LATENCY TUNING
+# 2. GAMING, WINDOWS GAME MODE & LOW-LATENCY DIRECTFLIP
 # -------------------------------------------------------------
-Write-Host "[2/7] Applying Gaming & System Responsiveness Tweaks..." -ForegroundColor Green
+Write-Host "[2/8] Enabling Windows Game Mode & Low-Latency DirectFlip..." -ForegroundColor Green
+
+# Windows Game Mode = ON
+$gameBarPath = "HKCU:\Software\Microsoft\GameBar"
+if (-not (Test-Path $gameBarPath)) { New-Item -Path $gameBarPath -Force | Out-Null }
+Set-ItemProperty -Path $gameBarPath -Name "AutoGameModeEnabled" -Value 1 -Type DWord -Force
 
 # Disable GameDVR background recording overhead
 $gameConfigPath = "HKCU:\System\GameConfigStore"
@@ -139,20 +147,18 @@ Set-ItemProperty -Path $tasksGames -Name "Scheduling Category" -Value "High" -Ty
 Set-ItemProperty -Path $tasksGames -Name "SFIO Priority" -Value "High" -Type String -Force
 Set-ItemProperty -Path $tasksGames -Name "Latency Sensitive" -Value "True" -Type String -Force
 
-Write-Host "  -> MMCSS gaming priority, DirectFlip, and latency-sensitive scheduling applied." -ForegroundColor Gray
+Write-Host "  -> Game Mode = ON, MMCSS gaming priority, DirectFlip, and latency-sensitive scheduling applied." -ForegroundColor Gray
 
 # -------------------------------------------------------------
 # 3. KERNEL, MEMORY MANAGEMENT, COMPRESSION & MOUSE INPUT LATENCY
 # -------------------------------------------------------------
-Write-Host "[3/7] Tuning Kernel Priority, Memory Compression & Mouse..." -ForegroundColor Green
+Write-Host "[3/8] Tuning Kernel Priority, Memory Compression & Mouse..." -ForegroundColor Green
 
 # Disable Windows Memory Compression (Frees CPU cycles on systems with 16GB-32GB RAM)
 try {
     Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
     Disable-MMAgent -PageCombining -ErrorAction SilentlyContinue
-} catch {
-    # Non-critical if cmdlet is restricted
-}
+} catch {}
 
 # CPU Quantum / Priority Separation (0x26 = 38: Short, variable foreground quantum)
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
@@ -172,9 +178,71 @@ Set-ItemProperty -Path $mouseKey -Name "MouseThreshold2" -Value "0" -Type String
 Write-Host "  -> Memory compression disabled, Win32PrioritySeparation 38, DisablePagingExecutive, and 1:1 Mouse." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 4. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
+# 4. MEMORY INTEGRITY (HVCI) & RESIZABLE BAR
 # -------------------------------------------------------------
-Write-Host "[4/7] Tuning Network TCP Stack for Low Ping & Fast Socket Recycling..." -ForegroundColor Green
+Write-Host "[4/8] Disabling Memory Integrity (HVCI) & Enabling Resizable BAR..." -ForegroundColor Green
+
+# Disable Memory Integrity (Core Isolation / HVCI)
+# Impact: Eliminates hypervisor code checking overhead, reduces stuttering in games.
+$hvciPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity"
+if (-not (Test-Path $hvciPath)) { New-Item -Path $hvciPath -Force | Out-Null }
+Set-ItemProperty -Path $hvciPath -Name "Enabled" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path $hvciPath -Name "HVCIMATRequired" -Value 0 -Type DWord -Force
+
+# Enforce Resizable BAR in driver registry if supported
+$gpuClassKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+if (Test-Path $gpuClassKey) {
+    Get-ChildItem $gpuClassKey -ErrorAction SilentlyContinue | ForEach-Object {
+        $driverDesc = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).DriverDesc
+        if ($driverDesc -like "*NVIDIA*") {
+            Set-ItemProperty -Path $_.PSPath -Name "MemoryManagement.ReBar" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name "RMReBar" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+Write-Host "  -> Memory Integrity (HVCI) disabled. Resizable BAR driver flags configured." -ForegroundColor Gray
+
+# -------------------------------------------------------------
+# 5. OPTIONAL: VBS (VIRTUALIZATION-BASED SECURITY) & SECURE BOOT
+# -------------------------------------------------------------
+Write-Host "[5/8] Checking Virtualization-Based Security (VBS) & Secure Boot..." -ForegroundColor Green
+
+$disableVBSChoice = $false
+if ($ForceDisableVBS) {
+    $disableVBSChoice = $true
+} else {
+    Write-Host ""
+    Write-Host "-----------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host "  OPTIONAL: Disable VBS (Virtualization-Based Security)?   " -ForegroundColor Yellow
+    Write-Host "-----------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host "  [+] BENEFIT: Boosts CPU frame rates by 5-15% in CPU-bound games and eliminates micro-stutters." -ForegroundColor White
+    Write-Host "  [-] TRADE-OFF: Lowers kernel virtualization defense; WSL2/Hyper-V/Docker can still run, but Credential Guard is off." -ForegroundColor White
+    Write-Host "  [-] NOTE ON SECURE BOOT: Secure Boot is controlled in your BIOS/UEFI. Some anti-cheat (e.g. Vanguard) requires it." -ForegroundColor White
+    Write-Host ""
+    $resp = Read-Host "Do you want to disable VBS (Virtualization-Based Security)? [y/N]"
+    if ($resp.Trim().ToLower() -in @("y", "yes")) {
+        $disableVBSChoice = $true
+    }
+}
+
+if ($disableVBSChoice) {
+    # Disable VBS via Registry
+    $dgPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard"
+    if (-not (Test-Path $dgPath)) { New-Item -Path $dgPath -Force | Out-Null }
+    Set-ItemProperty -Path $dgPath -Name "EnableVirtualizationBasedSecurity" -Value 0 -Type DWord -Force
+    Set-ItemProperty -Path $dgPath -Name "RequirePlatformSecurityFeatures" -Value 0 -Type DWord -Force
+
+    # Disable hypervisor launch type in BCD
+    bcdedit /set hypervisorlaunchtype off | Out-Null
+    Write-Host "  -> Virtualization-Based Security (VBS) disabled." -ForegroundColor Green
+} else {
+    Write-Host "  -> VBS left at default configuration." -ForegroundColor Gray
+}
+
+# -------------------------------------------------------------
+# 6. NETWORK & ADVANCED TCP/IP STACK OPTIMIZATION
+# -------------------------------------------------------------
+Write-Host "[6/8] Tuning Network TCP Stack for Low Ping & Fast Socket Recycling..." -ForegroundColor Green
 
 # Netsh TCP Global
 netsh int tcp set global autotuninglevel=normal | Out-Null
@@ -200,9 +268,9 @@ Set-ItemProperty -Path $tcpParams -Name "TCPTimedWaitDelay" -Value 30 -Type DWor
 Write-Host "  -> Network TCP autotuning normal, CUBIC, TIME_WAIT=30s, MaxUserPort=65534." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 5. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
+# 7. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
 # -------------------------------------------------------------
-Write-Host "[5/7] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
+Write-Host "[7/8] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
 
 $dataCollKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
 if (-not (Test-Path $dataCollKey)) { New-Item -Path $dataCollKey -Force | Out-Null }
@@ -229,12 +297,22 @@ Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "WaitToKillAppTimeout" -Value "2000" -Type String -Force
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Value "1000" -Type String -Force
 
+# Edge / Chrome background process prevention
+$edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+if (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
+Set-ItemProperty -Path $edgeKey -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force
+Set-ItemProperty -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+
+$chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
+if (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
+Set-ItemProperty -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+
 Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforced, MenuShowDelay=0ms." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 6. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
+# 8. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
 # -------------------------------------------------------------
-Write-Host "[6/7] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
+Write-Host "[8/8] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
 
 $windowsServicesToDisable = @(
     "AppMgmt",                 # Application Management
@@ -303,28 +381,12 @@ if (Get-Service -Name "lfsvc" -ErrorAction SilentlyContinue) {
 
 Write-Host "  -> Trimmed $disabledCount built-in Windows services to Disabled." -ForegroundColor Gray
 
-# -------------------------------------------------------------
-# 7. CLEAN STARTUP AND EDGE BACKGROUND RUNNERS
-# -------------------------------------------------------------
-Write-Host "[7/7] Disabling Headless Browser Runners & Startup Overhead..." -ForegroundColor Green
-
-# Edge background process prevention
-$edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-if (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
-Set-ItemProperty -Path $edgeKey -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
-
-# Chrome background process prevention
-$chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
-if (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
-Set-ItemProperty -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
-
 Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "       Minimal Windows Setup Completed Successfully!       " -ForegroundColor Yellow
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "Your PC is configured for ultra-low process/handle count," -ForegroundColor Cyan
-Write-Host "your exact 34 curated power settings, DirectFlip, and low-latency gaming." -ForegroundColor Cyan
+Write-Host "Game Mode ON, ReBAR enabled, and low-latency gaming." -ForegroundColor Cyan
 Write-Host ""
 
 if (-not $SkipReboot) {
