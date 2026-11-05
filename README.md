@@ -9,8 +9,8 @@ A clean, declarative, reproducible PowerShell setup to transform a stock Windows
 ### 1. Form Factor Optimization: Desktop vs Laptop
 * Prompts user or auto-detects hardware form factor (`Win32_SystemEnclosure ChassisTypes`).
 * **If Normal Desktop:**
-  * `CoalescingTimerInterval = 0x0` (DWORD Hex 0): Disables timer coalescing to eliminate CPU interrupt jitter on wall power.
-  * `HibernateEnabled = 0x0` (DWORD Hex 0): Disables hibernation and removes the large `hiberfil.sys` file.
+  * `CoalescingTimerInterval = 0` Disables timer coalescing to eliminate CPU interrupt jitter on wall power.
+  * `HibernateEnabled = 0` Disables hibernation and removes the large `hiberfil.sys` file.
 * **If Laptop:**
   * Preserves battery timer coalescing and lid/hibernation states.
 
@@ -25,15 +25,15 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 ### 3. Gaming, Windows Game Mode & Low-Latency DirectFlip
 * **Windows Game Mode = ON** (`AutoGameModeEnabled = 0x1`).
 * **Multimedia Class Scheduler (`Tasks\Games`):**
-  * `Affinity = 0x0` (DWORD Hex 0)
-  * `Background Only = "False"` (String)
-  * `Clock Rate = 0x2710` (DWORD Hex 2710 / Decimal 10000)
-  * `SFIO Priority = "High"` (String)
-  * `Scheduling Category = "High"` (String)
+  * `Affinity = 0x0` 
+  * `Background Only = "False"` 
+  * `Clock Rate = 0x2710` 
+  * `SFIO Priority = "High"` 
+  * `Scheduling Category = "High"` 
   * `GPU Priority = 0x8` & `Priority = 0x6`
-  * `Latency Sensitive = "True"` (String)
+  * `Latency Sensitive = "True"` 
 * **DirectFlip & DXGI Low-Latency Swapchain:**
-  * `EnableMMCSS = 0x1`, `SystemResponsiveness = 0xa` (Hex 0xa = Decimal 10)
+  * `EnableMMCSS = 0x1`, `SystemResponsiveness = 0xa` 
   * `AlwaysUseDirectFlip = 0x1` (Bypasses DWM compositor overhead in windowed/borderless games)
   * `AllowTearing = 0x1` (Allows uncapped tearing frames for minimal latency)
   * `AlwaysOn = 0x1` & `NoLazyMode = 0x1`
@@ -42,18 +42,18 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 
 ### 4. Kernel DPC, Interrupts & Memory Management
 * **`Session Manager\kernel`:**
-  * `DebugPollInterval = 0x3e8` (DWORD Hex 3e8 = Decimal 1000)
-  * `DpcWatchdogProfileOffset = 0x2710` (DWORD Hex 2710 = Decimal 10000)
-  * `ThreadDpcEnable = 0x0` (DWORD Hex 0)
-  * `KernelSEHOPEnabled = 0x0` (DWORD Hex 0)
+  * `DebugPollInterval = 0x3e8` 
+  * `DpcWatchdogProfileOffset = 0x2710`
+  * `ThreadDpcEnable = 0x0`
+  * `KernelSEHOPEnabled = 0x0`
 * **`Session Manager\Memory Management`:**
-  * `LargeSystemCache = 0x0` (DWORD Hex 0)
-  * `SecondLevelDataCache = 0x0` (DWORD Hex 0)
-  * `DisablePagingExecutive = 0x1` (DWORD Hex 1: Keeps drivers and Windows kernel locked in physical RAM)
-  * `IoPageLockLimit = 0x8000000` (DWORD Hex 8000000 = 128 MB)
+  * `LargeSystemCache = 0x0`
+  * `SecondLevelDataCache = 0x0`
+  * `DisablePagingExecutive = 0x1` (Keeps drivers and Windows kernel locked in physical RAM)
+  * `IoPageLockLimit = 0x8000000`
 * `Disable-MMAgent -MemoryCompression`: **Disables Windows Memory Compression** (`MemoryCompression = False`) and Page Combining.
-* `Win32PrioritySeparation = 0x26` (DWORD Hex 26 = Decimal 38): Short, variable high-priority quantum favoring foreground gaming loops.
-* **Raw 1:1 Mouse Input:** Disables Enhanced Pointer Precision via `MouseSpeed = "0"`, `MouseThreshold1 = "0"`, `MouseThreshold2 = "0"` (String values).
+* `Win32PrioritySeparation = 0x26` (Short, variable high-priority quantum favoring foreground gaming loops.
+* **Raw 1:1 Mouse Input:** Disables Enhanced Pointer Precision via `MouseSpeed = "0"`, `MouseThreshold1 = "0"`, `MouseThreshold2 = "0"`.
 
 ### 5. Memory Integrity (HVCI) & Resizable BAR
 * **Memory Integrity / Core Isolation (HVCI) Disabled:** Reduces hypervisor overhead and eliminates game micro-stutters.
@@ -69,9 +69,9 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 * Configures TCP congestion provider to `CUBIC`.
 * Sets TCP autotuning level to `Normal`.
 * Enables Receive Side Scaling (`RSS`) and Receive Segment Coalescing (`RSC`) for multi-core packet offloading.
-* `TCPTimedWaitDelay = 0x1e` (DWORD Hex 1e = Decimal 30): Accelerates socket reuse.
-* `MaxUserPort = 0xfffe` (DWORD Hex fffe = Decimal 65534): Maximizes dynamic outbound port availability.
-* `DefaultTTL = 0x40` (DWORD Hex 40 = Decimal 64).
+* `TCPTimedWaitDelay = 0x1e` : Accelerates socket reuse.
+* `MaxUserPort = 0xfffe` : Maximizes dynamic outbound port availability.
+* `DefaultTTL = 0x40` : Sets the default Time To Live (TTL) for IP packets.
 * `TcpMaxDupAcks = 0x2`, `SackOpts = 0x1`, `EnablePMTUDiscovery = 0x1`.
 
 ### 8. Telemetry, Copilot, Bing Search & Bloatware Elimination
