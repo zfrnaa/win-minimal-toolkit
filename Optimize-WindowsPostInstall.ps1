@@ -8,7 +8,7 @@
       3. Network / TCP stack optimization (CUBIC, RSS, RSC, No Throttling).
       4. Gaming & MMCSS latency optimization (SystemResponsiveness=0, GPU Priority=8, GameDVR=0).
       5. Complete Windows Telemetry, Diagnostic Logging, and Promo bloat elimination.
-      6. Trims unnecessary background services to Disabled / Manual.
+      6. Trims all 47 pure Windows background services to Disabled / Manual (zero third-party dependencies).
       7. Disables Windows animation lag (MenuShowDelay=0, instantaneous snappy UI).
 .NOTES
     Run in an elevated PowerShell session (Run as Administrator) after a fresh install.
@@ -34,9 +34,8 @@ Write-Host ""
 # -------------------------------------------------------------
 # 1. UNHIDE SPECIFIC CURATED ADVANCED POWER SETTINGS (34 SETTINGS)
 # -------------------------------------------------------------
-Write-Host "[1/7] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
+Write-Host "[1/6] Unhiding Curated Advanced Power Options..." -ForegroundColor Green
 
-# Exactly the 34 power settings you currently have enabled
 $curatedPowerSettings = @(
     # Hard Disk: Turn off hard disk after
     @{ Sub = "0012ee47-9041-4b5d-9b77-535fba8b1442"; Setting = "6738e2c4-e8a5-4a42-b16a-e040e769756e" },
@@ -101,9 +100,9 @@ powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 Write-Host "  -> Activated High Performance Power Scheme." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 2. GAMING, MULTIMEDIA & MMCSS LATENCY TUNING
+# 2. GAMING, MULTIMEDIA & MMCSS LATENCY TUNING (HAGS EXCLUDED)
 # -------------------------------------------------------------
-Write-Host "[2/7] Applying Gaming & System Responsiveness Tweaks..." -ForegroundColor Green
+Write-Host "[2/6] Applying Gaming & System Responsiveness Tweaks..." -ForegroundColor Green
 
 # Disable GameDVR background recording overhead
 $gameConfigPath = "HKCU:\System\GameConfigStore"
@@ -115,10 +114,7 @@ $allowGameDvr = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
 if (-not (Test-Path $allowGameDvr)) { New-Item -Path $allowGameDvr -Force | Out-Null }
 Set-ItemProperty -Path $allowGameDvr -Name "AllowGameDVR" -Value 0 -Type DWord -Force
 
-# Hardware-Accelerated GPU Scheduling (HAGS)
-$gfxPath = "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
-if (-not (Test-Path $gfxPath)) { New-Item -Path $gfxPath -Force | Out-Null }
-Set-ItemProperty -Path $gfxPath -Name "HwSchMode" -Value 2 -Type DWord -Force
+# Note: HAGS (Hardware-Accelerated GPU Scheduling) is intentionally untouched per preference.
 
 # Multimedia Class Scheduler Service (MMCSS) - 100% foreground CPU slice
 $systemProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -141,7 +137,7 @@ Write-Host "  -> MMCSS gaming priority and zero-throttle rules applied." -Foregr
 # -------------------------------------------------------------
 # 3. NETWORK & TCP STACK OPTIMIZATION
 # -------------------------------------------------------------
-Write-Host "[3/7] Tuning Network TCP Stack for Low Ping & Stability..." -ForegroundColor Green
+Write-Host "[3/6] Tuning Network TCP Stack for Low Ping & Stability..." -ForegroundColor Green
 
 # Global TCP Settings via Netsh
 netsh int tcp set global autotuninglevel=normal | Out-Null
@@ -158,7 +154,7 @@ Write-Host "  -> Network TCP autotuning normal, CUBIC congestion provider, RSS/R
 # -------------------------------------------------------------
 # 4. TELEMETRY, PROMOTIONS & WIDGETS ELIMINATION
 # -------------------------------------------------------------
-Write-Host "[4/7] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
+Write-Host "[4/6] Disabling Windows Telemetry & Diagnostic Logging..." -ForegroundColor Green
 
 $dataCollKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
 if (-not (Test-Path $dataCollKey)) { New-Item -Path $dataCollKey -Force | Out-Null }
@@ -184,7 +180,7 @@ Write-Host "  -> Telemetry policies locked to 0, diagnostic upload limits enforc
 # -------------------------------------------------------------
 # 5. UI SNAPPINESS & LATENCY REDUCTION
 # -------------------------------------------------------------
-Write-Host "[5/7] Minimizing UI Latency & Menu Delays..." -ForegroundColor Green
+Write-Host "[5/6] Minimizing UI Latency & Menu Delays..." -ForegroundColor Green
 
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0 -Type String -Force
 Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "AutoEndTasks" -Value "1" -Type String -Force
@@ -194,64 +190,77 @@ Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "HungAppTimeout" -Val
 Write-Host "  -> MenuShowDelay set to 0ms (Instant context and menu rendering)." -ForegroundColor Gray
 
 # -------------------------------------------------------------
-# 6. SERVICE MANAGEMENT (REDUCING IDLE PROCESS COUNT)
+# 6. WINDOWS BUILT-IN SERVICE MANAGEMENT (47 EXACT SERVICES)
 # -------------------------------------------------------------
-Write-Host "[6/7] Trimming Redundant Background Services..." -ForegroundColor Green
+Write-Host "[6/6] Trimming Exact Built-in Windows Services (Zero 3rd-Party Software)..." -ForegroundColor Green
 
-# Core list of non-essential background daemons that cause process bloat
-$servicesToDisable = @(
-    "DiagTrack",                 # Connected User Experiences and Telemetry
-    "SysMain",                   # SuperFetch / Prefetch memory cache daemon
-    "WSearch",                   # Windows Search Indexer (Voidtools Everything handles indexing)
-    "WerSvc",                    # Windows Error Reporting Service
-    "PcaSvc",                    # Program Compatibility Assistant Service
-    "DPS",                       # Diagnostic Policy Service
-    "diagsvc",                   # Diagnostic Execution Service
-    "WdiServiceHost",            # Diagnostic Service Host
-    "TrkWks",                    # Distributed Link Tracking Client
-    "WalletService",             # Windows Wallet Service
-    "CscService",                # Offline Files
-    "AppVClient",                # Microsoft App-V Client
-    "PeerDistSvc",               # BranchCache
-    "RemoteRegistry",            # Remote Registry
-    "TermService",               # Remote Desktop Services (if not used)
-    "SessionEnv",                # Remote Desktop Configuration
-    "RetailDemo",                # Retail Demo Service
-    "MapsBroker",                # Downloaded Maps Manager
-    "whesvc",                    # Windows Health and Optimized Experiences
-    "WpcMonSvc"                  # Parental Controls
+# Exactly the 47 Windows internal services configured as Disabled on your system
+$windowsServicesToDisable = @(
+    "AppMgmt",                 # Application Management
+    "AppVClient",              # Microsoft App-V Client
+    "AxInstSV",                # ActiveX Installer (AxInstSV)
+    "BDESVC",                  # BitLocker Drive Encryption Service
+    "CertPropSvc",             # Certificate Propagation
+    "CscService",              # Offline Files
+    "DevQueryBroker",          # DevQuery Background Discovery Broker
+    "diagsvc",                 # Diagnostic Execution Service
+    "DiagTrack",               # Connected User Experiences and Telemetry
+    "DialogBlockingService",   # DialogBlockingService
+    "DispBrokerDesktopSvc",    # Display Policy Service
+    "DPS",                     # Diagnostic Policy Service
+    "FontCache",               # Windows Font Cache Service
+    "FrameServer",             # Windows Camera Frame Server
+    "FrameServerMonitor",      # Windows Camera Frame Server Monitor
+    "hns",                     # Host Network Service
+    "IKEEXT",                  # IKE and AuthIP IPsec Keying Modules
+    "lmhosts",                 # TCP/IP NetBIOS Helper
+    "mpssvc",                  # Windows Defender Firewall (if using custom firewall or disabled)
+    "MsKeyboardFilter",        # Microsoft Keyboard Filter
+    "PcaSvc",                  # Program Compatibility Assistant Service
+    "PeerDistSvc",             # BranchCache
+    "PolicyAgent",             # IPsec Policy Agent
+    "RasMan",                  # Remote Access Connection Manager
+    "RemoteRegistry",          # Remote Registry
+    "SCardSvr",                # Smart Card
+    "SCPolicySvc",             # Smart Card Removal Policy
+    "SessionEnv",              # Remote Desktop Configuration
+    "SharedAccess",            # Internet Connection Sharing (ICS)
+    "shpamsvc",                # Shared PC Account Manager
+    "smphost",                 # Microsoft Storage Spaces SMP
+    "SNMPTrap",                # SNMP Trap
+    "SSDPSRV",                 # SSDP Discovery
+    "ssh-agent",               # OpenSSH Authentication Agent
+    "SysMain",                 # SysMain / Superfetch
+    "TermService",             # Remote Desktop Services
+    "TrkWks",                  # Distributed Link Tracking Client
+    "tzautoupdate",            # Auto Time Zone Updater
+    "UevAgentService",         # User Experience Virtualization Service
+    "WalletService",           # WalletService
+    "WdiServiceHost",          # Diagnostic Service Host
+    "WebClient",               # WebClient
+    "WerSvc",                  # Windows Error Reporting Service
+    "whesvc",                  # Windows Health and Optimized Experiences
+    "WinRM",                   # Windows Remote Management (WS-Management)
+    "WpcMonSvc",               # Parental Controls
+    "WSearch"                  # Windows Search Indexer
 )
 
-foreach ($svc in $servicesToDisable) {
+$disabledCount = 0
+foreach ($svc in $windowsServicesToDisable) {
     if (Get-Service -Name $svc -ErrorAction SilentlyContinue) {
         Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
         Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+        $disabledCount++
     }
 }
 
-# Geolocation service set to Manual
+# Windows Geolocation service set to Manual
 if (Get-Service -Name "lfsvc" -ErrorAction SilentlyContinue) {
     Stop-Service -Name "lfsvc" -Force -ErrorAction SilentlyContinue
     Set-Service -Name "lfsvc" -StartupType Manual -ErrorAction SilentlyContinue
 }
 
-Write-Host "  -> Background telemetry, diagnostics, and indexing services cleanly disabled." -ForegroundColor Gray
-
-# -------------------------------------------------------------
-# 7. CLEAN STARTUP AND EDGE BACKGROUND RUNNERS
-# -------------------------------------------------------------
-Write-Host "[7/7] Disabling Headless Browser Runners & Startup Overhead..." -ForegroundColor Green
-
-# Edge background process prevention
-$edgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-if (-not (Test-Path $edgeKey)) { New-Item -Path $edgeKey -Force | Out-Null }
-Set-ItemProperty -Path $edgeKey -Name "StartupBoostEnabled" -Value 0 -Type DWord -Force
-Set-ItemProperty -Path $edgeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
-
-# Chrome background process prevention
-$chromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
-if (-not (Test-Path $chromeKey)) { New-Item -Path $chromeKey -Force | Out-Null }
-Set-ItemProperty -Path $chromeKey -Name "BackgroundModeEnabled" -Value 0 -Type DWord -Force
+Write-Host "  -> Trimmed $disabledCount built-in Windows services to Disabled." -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green

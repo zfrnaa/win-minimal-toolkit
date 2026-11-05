@@ -6,18 +6,20 @@ A clean, declarative, reproducible PowerShell setup to transform a stock Windows
 
 ## 🚀 What This Does
 
-### 1. Advanced Power Plan Visibility (No More Hidden Settings!)
-By default, Windows hides dozens of critical power settings (CPU core parking, processor performance boost mode, PCIe power states, AHCI link management). 
-* Sets `Attributes = 2` on all entries under `Control\Power\PowerSettings`.
-* Makes all settings immediately visible and editable in `powercfg.cpl`.
-* Activates the **High Performance** power scheme.
+### 1. Curated Advanced Power Plan Visibility (Exact 34 Settings)
+Unhides specifically your 34 essential power settings in Windows Control Panel (`powercfg.cpl`), including:
+* **Processor Power Management:** Boost mode, Core parking min/max, idle demote/promote thresholds, frequency states, and heterogeneous scheduling (P-core vs E-core).
+* **PCI Express:** Link State Power Management.
+* **Storage & Display:** Disk spin-down timeout, adaptive display dimming, brightness.
+* **Sleep & Timers:** Sleep after, Hibernate after, Allow hybrid sleep, unattended sleep timeouts.
+* **Activates High Performance Power Scheme.**
 
 ### 2. Gaming & System Responsiveness (MMCSS)
 * `SystemResponsiveness = 0`: Allocates 100% CPU priority to foreground applications instead of reserving 20% for background OS tasks.
 * `NetworkThrottlingIndex = 0xffffffff`: Disables network throttling during CPU-heavy operations and gaming.
 * `GPU Priority = 8` & `Priority = 6` for the Multimedia Class Scheduler (`Games` task).
 * Disables `GameDVR` background recording and screenshot capture hooks.
-* Enables Hardware-Accelerated GPU Scheduling (`HwSchMode = 2`).
+* **HAGS (Hardware-Accelerated GPU Scheduling) is left untouched / disabled** per system preference.
 
 ### 3. Network / TCP Stack Optimization
 * Configures TCP congestion provider to `CUBIC`.
@@ -35,9 +37,9 @@ By default, Windows hides dozens of critical power settings (CPU core parking, p
 * Sets `MenuShowDelay = 0` for instantaneous right-click and context menu rendering without artificial Windows delays.
 * Speeds up application kill timeout on shutdown.
 
-### 6. Process & Service Trimming (~140 Process Baseline)
-* Cleanly stops and sets unnecessary background services to `Disabled` (e.g. `DiagTrack`, `SysMain`, `WSearch`, `WerSvc`, `PcaSvc`, `DPS`, `TrkWks`, `WalletService`, `CscService`).
-* Prevents Edge and Chrome from lingering in the background after closing.
+### 6. Pure Windows Internal Service Trimming (47 Exact Services)
+* Contains **zero third-party software services** — only pure Windows internal services.
+* Sets all 47 Windows daemons that cause process bloat to `Disabled` (e.g., `DiagTrack`, `SysMain`, `WSearch`, `WerSvc`, `PcaSvc`, `DPS`, `TrkWks`, `WalletService`, `CscService`, `TermService`).
 
 ---
 
@@ -53,16 +55,8 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 3. Restart your PC when prompted.
 
 ### Standalone Power Settings Unhider
-If you only want to expose all hidden power settings in the Windows Power Options dialog:
+If you only want to expose the 34 curated power settings in the Windows Power Options dialog:
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\Unhide-PowerSettings.ps1
 ```
-
----
-
-## 📂 Repository Structure
-
-* `Optimize-WindowsPostInstall.ps1`: Main post-install script.
-* `Unhide-PowerSettings.ps1`: Dedicated standalone utility to unhide power options.
-* `README.md`: Documentation and setting details.
