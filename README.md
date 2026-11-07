@@ -1,10 +1,10 @@
-# win-minimal-toolkit ⚡
+# win-minimal-toolkit
 
-A clean, declarative, reproducible PowerShell setup to transform a stock Windows 11 installation into a lean, minimal, low-latency environment with an idle baseline of **~130–140 processes** (down from 250–350+ out-of-the-box).
+A clean, declarative, reproducible PowerShell setup to transform a stock Windows 11 installation into a lean, minimal, low-latency environment with an idle baseline of **~100–140 processes** (down from 250–350+ out-of-the-box).
 
 ---
 
-## 🚀 What This Does
+## What This Does
 
 ### 1. Form Factor Optimization: Desktop vs Laptop
 * Prompts user or auto-detects hardware form factor (`Win32_SystemEnclosure ChassisTypes`).
@@ -19,11 +19,11 @@ Unhides specifically your 34 essential power settings in Windows Control Panel (
 * **Processor Power Management:** Boost mode, Core parking min/max, idle demote/promote thresholds, frequency states, and heterogeneous scheduling (P-core vs E-core).
 * **PCI Express:** Link State Power Management.
 * **Storage & Display:** Disk spin-down timeout, adaptive display dimming, brightness.
-* **Sleep & Timers:** Sleep after, Hibernate after, Allow hybrid sleep, unattended sleep timeouts.
+* **Sleep & Timers:** Sleep after (mins), Hibernate after (mins), Allow hybrid sleep, unattended sleep timeouts.
 * **Activates High Performance Power Scheme.**
 
 ### 3. Gaming, Windows Game Mode & Low-Latency DirectFlip
-* **Windows Game Mode = ON** (`AutoGameModeEnabled = 0x1`).
+* **Windows Game Mode = ON**.
 * **Multimedia Class Scheduler (`Tasks\Games`):**
   * `Affinity = 0x0` 
   * `Background Only = "False"` 
